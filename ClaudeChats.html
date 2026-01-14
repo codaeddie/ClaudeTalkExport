@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Chats Viewer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    .sidebar::-webkit-scrollbar, .main-view::-webkit-scrollbar { width: 8px; }
+    .sidebar::-webkit-scrollbar-thumb, .main-view::-webkit-scrollbar-thumb { 
+      background: #374151; border-radius: 4px; 
+    }
+    .message-content pre { margin: 1em 0; border-radius: 8px; overflow-x: auto; }
+    .message-content code { font-family: 'Fira Code', 'Consolas', monospace; font-size: 0.9em; }
+    .message-content p { margin: 0.5em 0; line-height: 1.6; }
+    .message-content ul, .message-content ol { margin: 0.5em 0; padding-left: 1.5em; }
+    .message-content pre code { padding: 1em; display: block; }
+    .message-content > *:first-child { margin-top: 0; }
+    .message-content > *:last-child { margin-bottom: 0; }
+    .message-content h1, .message-content h2, .message-content h3 { margin-top: 1em; margin-bottom: 0.5em; font-weight: 600; }
+    .message-content h1 { font-size: 1.5em; }
+    .message-content h2 { font-size: 1.25em; }
+    .message-content h3 { font-size: 1.1em; }
+    .human-msg { background: #1e3a5f; }
+    .assistant-msg { background: #1f2937; }
+    .conversation-item:hover, .project-item:hover { background: #374151; }
+    .conversation-item.active, .project-item.active { background: #4b5563; border-left: 3px solid #60a5fa; }
+    .conversation-item.empty-conv { opacity: 0.5; }
+    .attachment-block { background: #374151; border-radius: 8px; padding: 12px; margin-top: 8px; }
+    .attachment-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .attachment-content { margin-top: 12px; padding-top: 12px; border-top: 1px solid #4b5563; }
+    .attachment-raw { 
+      white-space: pre-wrap; 
+      font-family: 'Fira Code', 'Consolas', monospace; 
+      font-size: 0.85em; 
+      background: #1f2937; 
+      padding: 1em; 
+      border-radius: 8px; 
+      overflow-x: auto;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .file-indicator { display: inline-flex; align-items: center; gap: 4px; background: #4b5563; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; margin-top: 8px; }
+    .toggle-empty { cursor: pointer; user-select: none; }
+    .tab-btn { padding: 0.5rem 1rem; border-radius: 0.5rem; transition: all 0.2s; }
+    .tab-btn:hover { background: #374151; }
+    .tab-btn.active { background: #3b82f6; }
+    .file-badge { background: #065f46; padding: 2px 8px; border-radius: 9999px; font-size: 0.75rem; }
+    .memory-section { background: #1f2937; border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+    .memory-section h3 { color: #60a5fa; margin-bottom: 1rem; }
+    .project-card { background: #1f2937; border-radius: 12px; padding: 1.5rem; }
+    .doc-item { background: #374151; border-radius: 8px; padding: 1rem; margin-top: 0.5rem; }
+    .view-btn { 
+      padding: 4px 10px; 
+      border-radius: 4px; 
+      font-size: 0.75rem; 
+      cursor: pointer; 
+      transition: all 0.15s;
+      border: 1px solid #4b5563;
+      background: transparent;
+      color: #9ca3af;
+    }
+    .view-btn:hover { background: #4b5563; color: #fff; }
+    .view-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    .download-btn {
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: 1px solid #065f46;
+      background: #065f46;
+      color: #fff;
+    }
+    .download-btn:hover { background: #047857; border-color: #047857; }
+    .btn-group { display: flex; gap: 4px; margin-left: auto; }
+    .expand-btn {
+      cursor: pointer;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: #9ca3af;
+    }
+    .expand-btn:hover { background: #4b5563; }
+    .star-btn {
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 1rem;
+      transition: all 0.15s;
+      opacity: 0.4;
+    }
+    .star-btn:hover { opacity: 1; }
+    .star-btn.starred { opacity: 1; }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 h-screen overflow-hidden">
+  
+  <!-- Landing / File Loader -->
+  <div id="loader" class="h-full flex items-center justify-center">
+    <div class="text-center max-w-2xl">
+      <h1 class="text-4xl font-bold mb-4">Claude Chats Viewer</h1>
+      <p class="text-gray-400 mb-8">Drop your export files or click to load</p>
+      <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 px-8 py-4 rounded-lg text-lg font-medium transition-colors inline-block">
+        Select Files
+        <input type="file" id="fileInput" accept=".json" multiple class="hidden">
+      </label>
+      <div id="dropZone" class="mt-8 border-2 border-dashed border-gray-600 rounded-lg p-12 text-gray-500">
+        <p>Drag & drop your JSON files here</p>
+        <p class="text-sm mt-2 text-gray-600">Supports: conversations.json, projects.json, memories.json, users.json</p>
+      </div>
+      <div id="loadedFiles" class="mt-4 flex flex-wrap gap-2 justify-center"></div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" class="hidden h-full flex flex-col">
+    
+    <!-- Top Navigation -->
+    <div class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center gap-4">
+      <h1 class="text-xl font-bold mr-4">Claude Chats</h1>
+      <div class="flex gap-2">
+        <button class="tab-btn active" data-tab="conversations" onclick="switchTab('conversations')">
+          💬 Conversations <span id="convCountBadge" class="file-badge ml-1">0</span>
+        </button>
+        <button class="tab-btn" data-tab="starred" onclick="switchTab('starred')">
+          ⭐ Starred <span id="starCountBadge" class="file-badge ml-1">0</span>
+        </button>
+        <button class="tab-btn" data-tab="projects" onclick="switchTab('projects')">
+          📁 Projects <span id="projCountBadge" class="file-badge ml-1">0</span>
+        </button>
+        <button class="tab-btn" data-tab="memories" onclick="switchTab('memories')">
+          🧠 Memories
+        </button>
+      </div>
+      <div class="ml-auto text-sm text-gray-400">
+        <span id="loadedFilesIndicator"></span>
+      </div>
+    </div>
+
+    <!-- Content Area -->
+    <div class="flex-1 flex overflow-hidden">
+      
+      <!-- Conversations Tab -->
+      <div id="tab-conversations" class="tab-content flex w-full">
+        <!-- Sidebar -->
+        <div class="w-80 bg-gray-800 flex flex-col border-r border-gray-700">
+          <div class="p-4 border-b border-gray-700">
+            <input type="text" id="searchInput" placeholder="Search conversations..." 
+              class="w-full bg-gray-700 text-gray-100 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="mt-2 text-sm text-gray-400 flex justify-between items-center">
+              <span><span id="convCount">0</span> shown</span>
+              <label class="toggle-empty flex items-center gap-2">
+                <input type="checkbox" id="hideEmpty" class="rounded">
+                <span>Hide empty</span>
+              </label>
+            </div>
+          </div>
+          <div id="conversationList" class="sidebar flex-1 overflow-y-auto"></div>
+        </div>
+
+        <!-- Chat View -->
+        <div class="flex-1 flex flex-col">
+          <div id="chatHeader" class="p-4 border-b border-gray-700 bg-gray-800">
+            <h2 id="chatTitle" class="text-xl font-semibold">Select a conversation</h2>
+            <p id="chatMeta" class="text-sm text-gray-400"></p>
+          </div>
+          <div id="chatMessages" class="main-view flex-1 overflow-y-auto p-4 space-y-4">
+            <div class="text-center text-gray-500 mt-20">← Pick a conversation from the sidebar</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Projects Tab -->
+      <div id="tab-projects" class="tab-content hidden flex w-full">
+        <!-- Projects Sidebar -->
+        <div class="w-80 bg-gray-800 flex flex-col border-r border-gray-700">
+          <div class="p-4 border-b border-gray-700">
+            <input type="text" id="projectSearchInput" placeholder="Search projects..." 
+              class="w-full bg-gray-700 text-gray-100 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="mt-2 text-sm text-gray-400">
+              <span id="projCount">0</span> projects
+            </div>
+          </div>
+          <div id="projectList" class="sidebar flex-1 overflow-y-auto"></div>
+        </div>
+
+        <!-- Project View -->
+        <div class="flex-1 flex flex-col">
+          <div id="projectHeader" class="p-4 border-b border-gray-700 bg-gray-800">
+            <h2 id="projectTitle" class="text-xl font-semibold">Select a project</h2>
+            <p id="projectMeta" class="text-sm text-gray-400"></p>
+          </div>
+          <div id="projectContent" class="main-view flex-1 overflow-y-auto p-6">
+            <div class="text-center text-gray-500 mt-20">← Pick a project from the sidebar</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Starred Tab -->
+      <div id="tab-starred" class="tab-content hidden flex w-full">
+        <!-- Starred Sidebar -->
+        <div class="w-80 bg-gray-800 flex flex-col border-r border-gray-700">
+          <div class="p-4 border-b border-gray-700">
+            <div class="text-lg font-semibold text-yellow-400">⭐ Starred Conversations</div>
+            <div class="mt-2 text-sm text-gray-400">
+              <span id="starCount">0</span> favorites
+            </div>
+          </div>
+          <div id="starredList" class="sidebar flex-1 overflow-y-auto"></div>
+        </div>
+
+        <!-- Starred Chat View -->
+        <div class="flex-1 flex flex-col">
+          <div id="starredChatHeader" class="p-4 border-b border-gray-700 bg-gray-800">
+            <h2 id="starredChatTitle" class="text-xl font-semibold">Select a starred conversation</h2>
+            <p id="starredChatMeta" class="text-sm text-gray-400"></p>
+          </div>
+          <div id="starredChatMessages" class="main-view flex-1 overflow-y-auto p-4 space-y-4">
+            <div class="text-center text-gray-500 mt-20">← Pick a starred conversation</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Memories Tab -->
+      <div id="tab-memories" class="tab-content hidden w-full overflow-y-auto p-6">
+        <div id="memoriesContent" class="max-w-4xl mx-auto">
+          <div class="text-center text-gray-500 mt-20">No memories.json loaded</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Data stores
+    let conversations = [];
+    let projects = [];
+    let memories = null;
+    let users = null;
+    let currentConvId = null;
+    let currentProjectId = null;
+    let hideEmpty = false;
+    let loadedFileNames = [];
+    
+    // Starred UUIDs - persisted to localStorage
+    let starredUUIDs = new Set(JSON.parse(localStorage.getItem('claudeChats_starred') || '[]'));
+    
+    // Store raw content for attachments (keyed by attachId)
+    const attachmentStore = {};
+
+    // Save starred to localStorage
+    function saveStarred() {
+      localStorage.setItem('claudeChats_starred', JSON.stringify([...starredUUIDs]));
+    }
+
+    // Toggle star on a conversation
+    function toggleStar(uuid, event) {
+      event.stopPropagation();
+      if (starredUUIDs.has(uuid)) {
+        starredUUIDs.delete(uuid);
+      } else {
+        starredUUIDs.add(uuid);
+      }
+      saveStarred();
+      updateStarCounts();
+      updateConversationList();
+      renderStarredList();
+    }
+
+    // Update star count badges
+    function updateStarCounts() {
+      const count = starredUUIDs.size;
+      document.getElementById('starCountBadge').textContent = count;
+      document.getElementById('starCount').textContent = count;
+    }
+
+    // Marked.js config
+    marked.setOptions({
+      highlight: function(code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+          return hljs.highlight(code, { language: lang }).value;
+        }
+        return hljs.highlightAuto(code).value;
+      },
+      breaks: true
+    });
+
+    // File loading
+    const fileInput = document.getElementById('fileInput');
+    const dropZone = document.getElementById('dropZone');
+
+    fileInput.addEventListener('change', (e) => handleFiles(Array.from(e.target.files)));
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-blue-500', 'text-blue-400');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('border-blue-500', 'text-blue-400');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-blue-500', 'text-blue-400');
+      handleFiles(Array.from(e.dataTransfer.files));
+    });
+
+    function handleFiles(files) {
+      const jsonFiles = files.filter(f => f.name.endsWith('.json'));
+      let loaded = 0;
+      const total = jsonFiles.length;
+
+      jsonFiles.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            processFile(file.name, data);
+            loadedFileNames.push(file.name);
+            updateLoadedFilesDisplay();
+          } catch (err) {
+            console.error(`Failed to parse ${file.name}:`, err);
+          }
+          loaded++;
+          if (loaded === total) {
+            initApp();
+          }
+        };
+        reader.readAsText(file);
+      });
+    }
+
+    function processFile(filename, data) {
+      const nameLower = filename.toLowerCase();
+      
+      if (nameLower.includes('conversation')) {
+        conversations = Array.isArray(data) ? data : [];
+        conversations.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+        conversations.forEach(conv => {
+          conv._hasContent = checkConversationHasContent(conv);
+        });
+      } else if (nameLower.includes('project')) {
+        projects = Array.isArray(data) ? data : [];
+        projects.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      } else if (nameLower.includes('memor')) {
+        memories = Array.isArray(data) ? data[0] : data;
+      } else if (nameLower.includes('user')) {
+        users = Array.isArray(data) ? data : [data];
+      }
+    }
+
+    function updateLoadedFilesDisplay() {
+      const container = document.getElementById('loadedFiles');
+      container.innerHTML = loadedFileNames.map(name => 
+        `<span class="file-badge">${name}</span>`
+      ).join('');
+    }
+
+    function checkConversationHasContent(conv) {
+      if (!conv.chat_messages || conv.chat_messages.length === 0) return false;
+      return conv.chat_messages.some(msg => {
+        if (msg.text && msg.text.trim()) return true;
+        if (msg.attachments && msg.attachments.some(a => a.extracted_content && a.extracted_content.trim())) return true;
+        if (msg.files && msg.files.some(f => f.file_name && f.file_name.trim())) return true;
+        if (msg.content && Array.isArray(msg.content)) {
+          return msg.content.some(block => {
+            if (typeof block === 'string' && block.trim()) return true;
+            if (block.text && block.text.trim()) return true;
+            return false;
+          });
+        }
+        return false;
+      });
+    }
+
+    function initApp() {
+      document.getElementById('loader').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      
+      document.getElementById('convCountBadge').textContent = conversations.length;
+      document.getElementById('projCountBadge').textContent = projects.length;
+      
+      // Clean up starred UUIDs that no longer exist in loaded conversations
+      const validUUIDs = new Set(conversations.map(c => c.uuid));
+      starredUUIDs = new Set([...starredUUIDs].filter(uuid => validUUIDs.has(uuid)));
+      saveStarred();
+      
+      updateStarCounts();
+      renderStarredList();
+      document.getElementById('loadedFilesIndicator').textContent = loadedFileNames.join(', ');
+      
+      updateConversationList();
+      renderProjectList();
+      renderMemories();
+      
+      if (conversations.length === 0 && memories) {
+        switchTab('memories');
+      }
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabName);
+      });
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+      });
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+    }
+
+    // ============ ATTACHMENT HANDLING ============
+    function toggleAttachmentExpand(attachId) {
+      const container = document.getElementById(`${attachId}-container`);
+      if (container) {
+        container.classList.toggle('hidden');
+      }
+    }
+
+    function setAttachmentView(attachId, viewType) {
+      const store = attachmentStore[attachId];
+      if (!store) return;
+
+      const renderedEl = document.getElementById(`${attachId}-rendered`);
+      const rawEl = document.getElementById(`${attachId}-raw`);
+      const renderedBtn = document.getElementById(`${attachId}-btn-rendered`);
+      const rawBtn = document.getElementById(`${attachId}-btn-raw`);
+
+      if (viewType === 'rendered') {
+        renderedEl?.classList.remove('hidden');
+        rawEl?.classList.add('hidden');
+        renderedBtn?.classList.add('active');
+        rawBtn?.classList.remove('active');
+      } else {
+        renderedEl?.classList.add('hidden');
+        rawEl?.classList.remove('hidden');
+        renderedBtn?.classList.remove('active');
+        rawBtn?.classList.add('active');
+      }
+    }
+
+    function downloadAttachment(attachId) {
+      const store = attachmentStore[attachId];
+      if (!store) return;
+
+      const blob = new Blob([store.content], { type: getMimeType(store.filename) });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = store.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function getMimeType(filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      const mimeTypes = {
+        'html': 'text/html',
+        'htm': 'text/html',
+        'md': 'text/markdown',
+        'txt': 'text/plain',
+        'json': 'application/json',
+        'js': 'text/javascript',
+        'ts': 'text/typescript',
+        'css': 'text/css',
+        'py': 'text/x-python',
+        'java': 'text/x-java',
+        'c': 'text/x-c',
+        'cpp': 'text/x-c++',
+        'h': 'text/x-c',
+        'xml': 'application/xml',
+        'yaml': 'text/yaml',
+        'yml': 'text/yaml',
+        'csv': 'text/csv',
+        'sql': 'text/x-sql',
+        'sh': 'text/x-shellscript',
+        'rb': 'text/x-ruby',
+        'php': 'text/x-php',
+        'go': 'text/x-go',
+        'rs': 'text/x-rust',
+        'swift': 'text/x-swift',
+        'kt': 'text/x-kotlin'
+      };
+      return mimeTypes[ext] || 'text/plain';
+    }
+
+    function buildAttachmentBlock(attachId, filename, content, fileSize) {
+      // Store the raw content
+      attachmentStore[attachId] = { filename, content };
+
+      const sizeStr = fileSize ? `(${formatFileSize(fileSize)})` : '';
+      const ext = filename.split('.').pop().toLowerCase();
+      const isHtml = ext === 'html' || ext === 'htm';
+      
+      // Determine how to render
+      let renderedContent;
+      if (isHtml) {
+        // For HTML, render in an iframe-like sandbox or just show highlighted
+        renderedContent = `<div class="bg-gray-800 p-4 rounded">${highlightCode(content, 'html')}</div>`;
+      } else {
+        renderedContent = renderMarkdown(content);
+      }
+
+      return `
+        <div class="attachment-block">
+          <div class="attachment-header">
+            <span class="expand-btn" onclick="toggleAttachmentExpand('${attachId}')">▼</span>
+            <span>📄</span>
+            <span class="font-medium">${escapeHtml(filename)}</span>
+            <span class="text-gray-400 text-sm">${sizeStr}</span>
+            <div class="btn-group">
+              <button id="${attachId}-btn-rendered" class="view-btn active" onclick="event.stopPropagation(); setAttachmentView('${attachId}', 'rendered')">Rendered</button>
+              <button id="${attachId}-btn-raw" class="view-btn" onclick="event.stopPropagation(); setAttachmentView('${attachId}', 'raw')">Raw</button>
+              <button class="download-btn" onclick="event.stopPropagation(); downloadAttachment('${attachId}')">⬇ Download</button>
+            </div>
+          </div>
+          <div id="${attachId}-container" class="attachment-content">
+            <div id="${attachId}-rendered" class="message-content">${renderedContent}</div>
+            <div id="${attachId}-raw" class="attachment-raw hidden">${escapeHtml(content)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function highlightCode(code, lang) {
+      try {
+        if (lang && hljs.getLanguage(lang)) {
+          return `<pre><code class="hljs">${hljs.highlight(code, { language: lang }).value}</code></pre>`;
+        }
+        return `<pre><code class="hljs">${hljs.highlightAuto(code).value}</code></pre>`;
+      } catch {
+        return `<pre><code>${escapeHtml(code)}</code></pre>`;
+      }
+    }
+
+    // ============ STARRED ============
+    function renderStarredList() {
+      const starredConvs = conversations.filter(c => starredUUIDs.has(c.uuid));
+      const list = document.getElementById('starredList');
+      
+      if (starredConvs.length === 0) {
+        list.innerHTML = '<div class="p-4 text-center text-gray-500">No starred conversations yet.<br><br>Click the ⭐ next to any conversation to add it here.</div>';
+        return;
+      }
+      
+      list.innerHTML = starredConvs.map(conv => {
+        const date = new Date(conv.updated_at).toLocaleDateString();
+        const name = conv.name || conv.summary || 'Untitled';
+        const msgCount = conv.chat_messages?.length || 0;
+        
+        let imageCount = 0;
+        let docCount = 0;
+        const imgRegex = /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)$/i;
+        (conv.chat_messages || []).forEach(msg => {
+          (msg.attachments || []).forEach(a => {
+            if (a.file_name) {
+              if (imgRegex.test(a.file_name)) imageCount++;
+              else docCount++;
+            }
+          });
+          (msg.files || []).forEach(f => {
+            if (f.file_name) {
+              if (imgRegex.test(f.file_name)) imageCount++;
+              else docCount++;
+            }
+          });
+        });
+        
+        let fileIndicator = '';
+        if (docCount > 0) fileIndicator += `<span class="text-yellow-400">📄${docCount}</span>`;
+        if (imageCount > 0) fileIndicator += `<span class="text-purple-400 ml-1">🖼️${imageCount}</span>`;
+        const projectIndicator = conv.project_uuid ? '<span class="text-purple-400">📁</span>' : '';
+        
+        return `
+          <div class="conversation-item p-4 cursor-pointer border-b border-gray-700"
+               onclick="selectStarredConversation('${conv.uuid}')">
+            <div class="font-medium truncate flex items-center gap-2">
+              <span class="star-btn starred" onclick="toggleStar('${conv.uuid}', event)" title="Remove from starred">⭐</span>
+              ${projectIndicator}
+              ${escapeHtml(name)}
+            </div>
+            <div class="text-sm text-gray-400 mt-1 flex justify-between">
+              <span>${date} · ${msgCount} msgs</span>
+              ${fileIndicator}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectStarredConversation(uuid) {
+      const conv = conversations.find(c => c.uuid === uuid);
+      if (!conv) return;
+
+      document.querySelectorAll('#starredList .conversation-item').forEach(el => el.classList.remove('active'));
+      document.querySelector(`#starredList .conversation-item[onclick*="${uuid}"]`)?.classList.add('active');
+
+      document.getElementById('starredChatTitle').textContent = conv.name || conv.summary || 'Untitled';
+      const created = new Date(conv.created_at).toLocaleString();
+      const updated = new Date(conv.updated_at).toLocaleString();
+      let meta = `Created: ${created} · Updated: ${updated}`;
+      if (conv.project_uuid) {
+        const proj = projects.find(p => p.uuid === conv.project_uuid);
+        if (proj) meta += ` · Project: ${proj.name}`;
+      }
+      document.getElementById('starredChatMeta').textContent = meta;
+
+      const container = document.getElementById('starredChatMessages');
+      const messages = conv.chat_messages || [];
+      
+      container.innerHTML = messages.map((msg, idx) => {
+        const isHuman = msg.sender === 'human';
+        const time = new Date(msg.created_at).toLocaleTimeString();
+        const textContent = msg.text || extractTextFromContent(msg.content) || '';
+        
+        let attachmentsHtml = '';
+        
+        if (msg.attachments && msg.attachments.length > 0) {
+          msg.attachments.forEach((att, attIdx) => {
+            if (att.file_name && att.file_name.trim()) {
+              const hasContent = att.extracted_content && att.extracted_content.trim();
+              const attachId = `star-attach-${uuid}-${idx}-${attIdx}`;
+              
+              if (hasContent) {
+                attachmentsHtml += buildAttachmentBlock(attachId, att.file_name, att.extracted_content, att.file_size);
+              } else {
+                const sizeStr = att.file_size ? `(${formatFileSize(att.file_size)})` : '';
+                attachmentsHtml += `
+                  <div class="file-indicator">
+                    <span>📄</span>
+                    <span>${escapeHtml(att.file_name)}</span>
+                    <span class="text-gray-400">${sizeStr}</span>
+                    <span class="text-gray-500 text-xs">(no content)</span>
+                  </div>
+                `;
+              }
+            }
+          });
+        }
+        
+        if (msg.files && msg.files.length > 0) {
+          msg.files.forEach(file => {
+            if (file.file_name && file.file_name.trim()) {
+              const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(file.file_name);
+              attachmentsHtml += `
+                <div class="file-indicator">
+                  <span>${isImage ? '🖼️' : '📎'}</span>
+                  <span>${escapeHtml(file.file_name)}</span>
+                  ${isImage ? '<span class="text-gray-400">(image not in export)</span>' : ''}
+                </div>
+              `;
+            }
+          });
+        }
+        
+        const mainContent = textContent.trim() 
+          ? renderMarkdown(textContent)
+          : (attachmentsHtml ? '' : '<span class="text-gray-500 italic">[no text content]</span>');
+        
+        return `
+          <div class="${isHuman ? 'human-msg' : 'assistant-msg'} rounded-lg p-4 max-w-4xl ${isHuman ? 'ml-auto' : ''}">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="font-semibold ${isHuman ? 'text-blue-300' : 'text-green-300'}">
+                ${isHuman ? 'You' : 'Claude'}
+              </span>
+              <span class="text-xs text-gray-500">${time}</span>
+            </div>
+            <div class="message-content">${mainContent}</div>
+            ${attachmentsHtml}
+          </div>
+        `;
+      }).join('');
+
+      container.scrollTop = 0;
+    }
+
+    // ============ CONVERSATIONS ============
+    function updateConversationList() {
+      const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+      let filtered = conversations;
+      
+      if (searchQuery) {
+        filtered = filtered.filter(conv => {
+          const name = (conv.name || '').toLowerCase();
+          const summary = (conv.summary || '').toLowerCase();
+          const messages = (conv.chat_messages || []).some(m => 
+            (m.text || '').toLowerCase().includes(searchQuery)
+          );
+          return name.includes(searchQuery) || summary.includes(searchQuery) || messages;
+        });
+      }
+      
+      if (hideEmpty) {
+        filtered = filtered.filter(conv => conv._hasContent);
+      }
+      
+      document.getElementById('convCount').textContent = filtered.length;
+      renderConversationList(filtered);
+    }
+
+    function renderConversationList(convs) {
+      const list = document.getElementById('conversationList');
+      list.innerHTML = convs.map(conv => {
+        const date = new Date(conv.updated_at).toLocaleDateString();
+        const name = conv.name || conv.summary || 'Untitled';
+        const preview = truncate(name, 50);
+        const msgCount = conv.chat_messages?.length || 0;
+        const isEmpty = !conv._hasContent;
+        const isStarred = starredUUIDs.has(conv.uuid);
+        
+        let imageCount = 0;
+        let docCount = 0;
+        const imgRegex = /\.(png|jpg|jpeg|gif|webp|svg|bmp|ico)$/i;
+        (conv.chat_messages || []).forEach(msg => {
+          (msg.attachments || []).forEach(a => {
+            if (a.file_name) {
+              if (imgRegex.test(a.file_name)) imageCount++;
+              else docCount++;
+            }
+          });
+          (msg.files || []).forEach(f => {
+            if (f.file_name) {
+              if (imgRegex.test(f.file_name)) imageCount++;
+              else docCount++;
+            }
+          });
+        });
+        
+        let fileIndicator = '';
+        if (docCount > 0) fileIndicator += `<span class="text-yellow-400">📄${docCount}</span>`;
+        if (imageCount > 0) fileIndicator += `<span class="text-purple-400 ml-1">🖼️${imageCount}</span>`;
+        const projectIndicator = conv.project_uuid ? '<span class="text-purple-400">📁</span>' : '';
+        
+        return `
+          <div class="conversation-item p-4 cursor-pointer border-b border-gray-700 ${conv.uuid === currentConvId ? 'active' : ''} ${isEmpty ? 'empty-conv' : ''}"
+               onclick="selectConversation('${conv.uuid}')">
+            <div class="font-medium truncate flex items-center gap-2">
+              <span class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${conv.uuid}', event)" title="${isStarred ? 'Remove from starred' : 'Add to starred'}">⭐</span>
+              ${projectIndicator}
+              ${escapeHtml(preview)}
+            </div>
+            <div class="text-sm text-gray-400 mt-1 flex justify-between">
+              <span>${date} · ${msgCount} msgs</span>
+              ${fileIndicator}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectConversation(uuid) {
+      currentConvId = uuid;
+      const conv = conversations.find(c => c.uuid === uuid);
+      if (!conv) return;
+
+      document.querySelectorAll('.conversation-item').forEach(el => el.classList.remove('active'));
+      document.querySelector(`.conversation-item[onclick*="${uuid}"]`)?.classList.add('active');
+
+      document.getElementById('chatTitle').textContent = conv.name || conv.summary || 'Untitled';
+      const created = new Date(conv.created_at).toLocaleString();
+      const updated = new Date(conv.updated_at).toLocaleString();
+      let meta = `Created: ${created} · Updated: ${updated}`;
+      if (conv.project_uuid) {
+        const proj = projects.find(p => p.uuid === conv.project_uuid);
+        if (proj) meta += ` · Project: ${proj.name}`;
+      }
+      document.getElementById('chatMeta').textContent = meta;
+
+      const container = document.getElementById('chatMessages');
+      const messages = conv.chat_messages || [];
+      
+      container.innerHTML = messages.map((msg, idx) => {
+        const isHuman = msg.sender === 'human';
+        const time = new Date(msg.created_at).toLocaleTimeString();
+        const textContent = msg.text || extractTextFromContent(msg.content) || '';
+        
+        let attachmentsHtml = '';
+        
+        // Handle attachments with extracted content
+        if (msg.attachments && msg.attachments.length > 0) {
+          msg.attachments.forEach((att, attIdx) => {
+            if (att.file_name && att.file_name.trim()) {
+              const hasContent = att.extracted_content && att.extracted_content.trim();
+              const attachId = `attach-${uuid}-${idx}-${attIdx}`;
+              
+              if (hasContent) {
+                attachmentsHtml += buildAttachmentBlock(
+                  attachId, 
+                  att.file_name, 
+                  att.extracted_content, 
+                  att.file_size
+                );
+              } else {
+                const sizeStr = att.file_size ? `(${formatFileSize(att.file_size)})` : '';
+                attachmentsHtml += `
+                  <div class="file-indicator">
+                    <span>📄</span>
+                    <span>${escapeHtml(att.file_name)}</span>
+                    <span class="text-gray-400">${sizeStr}</span>
+                    <span class="text-gray-500 text-xs">(no content)</span>
+                  </div>
+                `;
+              }
+            }
+          });
+        }
+        
+        // Handle files (images mostly - no extracted content)
+        if (msg.files && msg.files.length > 0) {
+          msg.files.forEach(file => {
+            if (file.file_name && file.file_name.trim()) {
+              const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(file.file_name);
+              attachmentsHtml += `
+                <div class="file-indicator">
+                  <span>${isImage ? '🖼️' : '📎'}</span>
+                  <span>${escapeHtml(file.file_name)}</span>
+                  ${isImage ? '<span class="text-gray-400">(image not in export)</span>' : ''}
+                </div>
+              `;
+            }
+          });
+        }
+        
+        const mainContent = textContent.trim() 
+          ? renderMarkdown(textContent)
+          : (attachmentsHtml ? '' : '<span class="text-gray-500 italic">[no text content]</span>');
+        
+        return `
+          <div class="${isHuman ? 'human-msg' : 'assistant-msg'} rounded-lg p-4 max-w-4xl ${isHuman ? 'ml-auto' : ''}">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="font-semibold ${isHuman ? 'text-blue-300' : 'text-green-300'}">
+                ${isHuman ? 'You' : 'Claude'}
+              </span>
+              <span class="text-xs text-gray-500">${time}</span>
+            </div>
+            <div class="message-content">${mainContent}</div>
+            ${attachmentsHtml}
+          </div>
+        `;
+      }).join('');
+
+      container.scrollTop = 0;
+    }
+
+    // ============ PROJECTS ============
+    function renderProjectList() {
+      const searchQuery = (document.getElementById('projectSearchInput')?.value || '').toLowerCase();
+      let filtered = projects;
+      
+      if (searchQuery) {
+        filtered = filtered.filter(proj => {
+          const name = (proj.name || '').toLowerCase();
+          const desc = (proj.description || '').toLowerCase();
+          return name.includes(searchQuery) || desc.includes(searchQuery);
+        });
+      }
+      
+      document.getElementById('projCount').textContent = filtered.length;
+      
+      const list = document.getElementById('projectList');
+      list.innerHTML = filtered.map(proj => {
+        const date = new Date(proj.updated_at).toLocaleDateString();
+        const docCount = (proj.docs || []).length;
+        const isPrivate = proj.is_private ? '🔒' : '';
+        
+        return `
+          <div class="project-item p-4 cursor-pointer border-b border-gray-700 ${proj.uuid === currentProjectId ? 'active' : ''}"
+               onclick="selectProject('${proj.uuid}')">
+            <div class="font-medium truncate">${isPrivate} ${escapeHtml(proj.name || 'Untitled Project')}</div>
+            <div class="text-sm text-gray-400 mt-1">
+              ${date} · ${docCount} docs
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectProject(uuid) {
+      currentProjectId = uuid;
+      const proj = projects.find(p => p.uuid === uuid);
+      if (!proj) return;
+
+      document.querySelectorAll('.project-item').forEach(el => el.classList.remove('active'));
+      document.querySelector(`.project-item[onclick*="${uuid}"]`)?.classList.add('active');
+
+      document.getElementById('projectTitle').textContent = proj.name || 'Untitled Project';
+      const created = new Date(proj.created_at).toLocaleString();
+      const updated = new Date(proj.updated_at).toLocaleString();
+      document.getElementById('projectMeta').textContent = `Created: ${created} · Updated: ${updated}`;
+
+      const container = document.getElementById('projectContent');
+      const projConvs = conversations.filter(c => c.project_uuid === proj.uuid);
+      
+      let html = '<div class="project-card">';
+      
+      if (proj.description) {
+        html += `
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-gray-300 mb-2">Description</h3>
+            <div class="message-content text-gray-400">${renderMarkdown(proj.description)}</div>
+          </div>
+        `;
+      }
+      
+      if (proj.prompt_template) {
+        html += `
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-gray-300 mb-2">System Prompt</h3>
+            <div class="bg-gray-800 rounded-lg p-4 message-content text-sm">${renderMarkdown(proj.prompt_template)}</div>
+          </div>
+        `;
+      }
+      
+      if (memories && memories.project_memories && memories.project_memories[proj.uuid]) {
+        html += `
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-purple-400 mb-2">🧠 Project Memory</h3>
+            <div class="bg-gray-800 rounded-lg p-4 message-content">${renderMarkdown(memories.project_memories[proj.uuid])}</div>
+          </div>
+        `;
+      }
+      
+      if (proj.docs && proj.docs.length > 0) {
+        html += `<div class="mb-6">
+          <h3 class="text-lg font-semibold text-gray-300 mb-2">Documents (${proj.docs.length})</h3>
+        `;
+        proj.docs.forEach((doc, idx) => {
+          const docName = doc.filename || doc.file_name || doc.name || `Document ${idx + 1}`;
+          const docContent = doc.content || doc.extracted_content || '';
+          const attachId = `proj-doc-${uuid}-${idx}`;
+          
+          if (docContent) {
+            html += buildAttachmentBlock(attachId, docName, docContent, null);
+          } else {
+            html += `
+              <div class="doc-item">
+                <span>📄</span>
+                <span class="font-medium">${escapeHtml(docName)}</span>
+                <span class="text-gray-500 text-xs">(no content)</span>
+              </div>
+            `;
+          }
+        });
+        html += '</div>';
+      }
+      
+      if (projConvs.length > 0) {
+        html += `
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-gray-300 mb-2">Conversations (${projConvs.length})</h3>
+            <div class="space-y-2">
+        `;
+        projConvs.forEach(conv => {
+          const date = new Date(conv.updated_at).toLocaleDateString();
+          const msgCount = conv.chat_messages?.length || 0;
+          html += `
+            <div class="doc-item cursor-pointer hover:bg-gray-600" onclick="switchTab('conversations'); setTimeout(() => selectConversation('${conv.uuid}'), 100);">
+              <div class="flex items-center justify-between">
+                <span>💬 ${escapeHtml(conv.name || conv.summary || 'Untitled')}</span>
+                <span class="text-sm text-gray-400">${date} · ${msgCount} msgs</span>
+              </div>
+            </div>
+          `;
+        });
+        html += '</div></div>';
+      }
+      
+      html += '</div>';
+      container.innerHTML = html;
+      container.scrollTop = 0;
+    }
+
+    // ============ MEMORIES ============
+    function renderMemories() {
+      const container = document.getElementById('memoriesContent');
+      
+      if (!memories) {
+        container.innerHTML = '<div class="text-center text-gray-500 mt-20">No memories.json loaded</div>';
+        return;
+      }
+      
+      let html = '';
+      
+      if (memories.conversations_memory) {
+        html += `
+          <div class="memory-section">
+            <h3 class="text-2xl font-bold">🧠 What Claude Remembers About You</h3>
+            <div class="message-content mt-4">${renderMarkdown(memories.conversations_memory)}</div>
+          </div>
+        `;
+      }
+      
+      if (memories.project_memories && Object.keys(memories.project_memories).length > 0) {
+        html += `<h2 class="text-xl font-bold mb-4 mt-8">📁 Project-Specific Memories</h2>`;
+        
+        Object.entries(memories.project_memories).forEach(([projId, memory]) => {
+          const proj = projects.find(p => p.uuid === projId);
+          const projName = proj ? proj.name : 'Unknown Project';
+          
+          html += `
+            <div class="memory-section">
+              <h3 class="text-lg font-semibold cursor-pointer hover:text-blue-400" 
+                  onclick="switchTab('projects'); setTimeout(() => selectProject('${projId}'), 100);">
+                📁 ${escapeHtml(projName)}
+              </h3>
+              <div class="message-content mt-4">${renderMarkdown(memory)}</div>
+            </div>
+          `;
+        });
+      }
+      
+      container.innerHTML = html || '<div class="text-center text-gray-500 mt-20">No memory data found</div>';
+    }
+
+    // ============ UTILITIES ============
+    function extractTextFromContent(content) {
+      if (!content || !Array.isArray(content)) return '';
+      return content.map(block => {
+        if (typeof block === 'string') return block;
+        if (block.text) return block.text;
+        if (block.type === 'text') return block.text || '';
+        if (block.type === 'code') return '```\n' + block.text + '\n```';
+        return '';
+      }).join('\n');
+    }
+
+    function renderMarkdown(text) {
+      try {
+        return marked.parse(text);
+      } catch {
+        return escapeHtml(text);
+      }
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function truncate(str, len) {
+      return str.length > len ? str.slice(0, len) + '...' : str;
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // Event listeners
+    document.getElementById('searchInput').addEventListener('input', updateConversationList);
+    document.getElementById('projectSearchInput')?.addEventListener('input', renderProjectList);
+    document.getElementById('hideEmpty').addEventListener('change', (e) => {
+      hideEmpty = e.target.checked;
+      updateConversationList();
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.getElementById('searchInput').value = '';
+        if (document.getElementById('projectSearchInput')) {
+          document.getElementById('projectSearchInput').value = '';
+        }
+        updateConversationList();
+        renderProjectList();
+      }
+    });
+  </script>
+</body>
+</html>
